@@ -8,14 +8,14 @@ client = MongoClient(MONGO_URI)
 db = client["test"]
 issue_collection = db["issue"]
 
-# Comment Schema
+
 class Comment(BaseModel):
     commenterId: str
     commenterName: Optional[str] = None
     commentText: str
     commentDate: Optional[str] = None
 
-# Issue Schema
+
 class Issue(BaseModel):
     id: Optional[str] = None
     IssueTitle: str
@@ -35,7 +35,7 @@ class Issue(BaseModel):
     isSpam: bool = False
     comments: List[Comment] = []
 
-# Convert MongoDB document to Pydantic model
+
 def issue_to_dict(issue):
     if issue:
         return Issue(

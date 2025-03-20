@@ -26,7 +26,7 @@ class Admin(BaseModel):
     state: str
     role: str
 
-# Convert MongoDB document to Pydantic model
+
 def admin_to_dict(admin):
     if admin:
         return Admin(
