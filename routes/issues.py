@@ -1,31 +1,52 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Depends
 from bson.objectid import ObjectId
 from model.issue_model import Issue, issue_collection, issue_to_dict, Comment
 from typing import List
+from controllers.auth_controller import check_token
 
 router = APIRouter()
 
 @router.post("/create", response_model=Issue)
-async def create_issue(issue: Issue):
+async def create_issue(issue: Issue, token: str = Depends(check_token)):
     issue_data = issue.dict()
     result = issue_collection.insert_one(issue_data)
     created_issue = issue_collection.find_one({"_id": result.inserted_id})
     return issue_to_dict(created_issue)
 
-@router.get("/get_all", response_model=List[Issue])
-async def get_all_issues():
+@router.get("/all", response_model=List[Issue])
+async def get_all_issues(token: str = Depends(check_token)):
     issues = issue_collection.find()
     return [issue_to_dict(issue) for issue in issues]
 
-@router.get("/get_by_id/{id}", response_model=Issue)
-async def get_issue_by_id(id: str):
+@router.get("/location/{location}", response_model=List[Issue])
+async def get_issues_by_location(location: str, token: str = Depends(check_token)):
+    issues = issue_collection.find({"IssueLocation": location})
+    return [issue_to_dict(issue) for issue in issues]
+
+@router.get("/pincode/{pincode}", response_model=List[Issue])
+async def get_issues_by_pincode(pincode: str, token: str = Depends(check_token)):
+    issues = issue_collection.find({"IssuePincode": pincode})
+    return [issue_to_dict(issue) for issue in issues]
+
+@router.get("/status/{status}", response_model=List[Issue])
+async def get_issues_by_status(status: str, token: str = Depends(check_token)):
+    issues = issue_collection.find({"IssueStatus": status})
+    return [issue_to_dict(issue) for issue in issues]
+
+@router.get("/type/{type}", response_model=List[Issue])
+async def get_issues_by_type(type: str, token: str = Depends(check_token)):
+    issues = issue_collection.find({"IssueType": type})
+    return [issue_to_dict(issue) for issue in issues]
+
+@router.get("/{id}", response_model=Issue)
+async def get_issue_by_id(id: str, token: str = Depends(check_token)):
     issue = issue_collection.find_one({"_id": ObjectId(id)})
     if issue:
         return issue_to_dict(issue)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
-@router.put("/update/{id}", response_model=Issue)
-async def update_issue(id: str, issue: Issue):
+@router.put("/{id}", response_model=Issue)
+async def update_issue(id: str, issue: Issue, token: str = Depends(check_token)):
     updated_issue = issue_collection.find_one_and_update(
         {"_id": ObjectId(id)},
         {"$set": issue.dict()},
@@ -35,35 +56,27 @@ async def update_issue(id: str, issue: Issue):
         return issue_to_dict(updated_issue)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
-@router.delete("/delete/{id}")
-async def delete_issue(id: str):
-    result = issue_collection.find_one_and_delete({"_id": ObjectId(id)})
-    if result:
-        return {"message": "Issue deleted successfully"}
+@router.put("/{issueid}/{userid}/forward", response_model=Issue)
+async def forward_issue(issueid: str, userid: str, token: str = Depends(check_token)):
+    issue = issue_collection.find_one({"_id": ObjectId(issueid)})
+    if issue:
+        if userid not in issue.get("ForwardedByPeople", []):
+            issue["ForwardedByPeople"].append(userid)
+            updated_issue = issue_collection.find_one_and_update(
+                {"_id": ObjectId(issueid)},
+                {"$set": {"ForwardedByPeople": issue["ForwardedByPeople"]}},
+                return_document=True
+            )
+            return issue_to_dict(updated_issue)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
-@router.get("/get_by_pincode/{pincode}", response_model=List[Issue])
-async def get_issues_by_pincode(pincode: str):
-    issues = issue_collection.find({"IssuePincode": pincode})
+@router.get("/{userid}/use", response_model=List[Issue])
+async def get_issues_by_user(userid: str, token: str = Depends(check_token)):
+    issues = issue_collection.find({"createdBy": userid})
     return [issue_to_dict(issue) for issue in issues]
 
-@router.get("/get_by_location/{location}", response_model=List[Issue])
-async def get_issues_by_location(location: str):
-    issues = issue_collection.find({"IssueLocation": location})
-    return [issue_to_dict(issue) for issue in issues]
-
-@router.get("/get_by_type/{type}", response_model=List[Issue])
-async def get_issues_by_type(type: str):
-    issues = issue_collection.find({"IssueType": type})
-    return [issue_to_dict(issue) for issue in issues]
-
-@router.get("/get_by_status/{status}", response_model=List[Issue])
-async def get_issues_by_status(status: str):
-    issues = issue_collection.find({"IssueStatus": status})
-    return [issue_to_dict(issue) for issue in issues]
-
-@router.put("/update_status/{id}/{status}", response_model=Issue)
-async def update_status(id: str, status: str):
+@router.put("/{id}/status", response_model=Issue)
+async def update_status(id: str, status: str, token: str = Depends(check_token)):
     issue = issue_collection.find_one_and_update(
         {"_id": ObjectId(id)},
         {"$set": {"IssueStatus": status}},
@@ -73,27 +86,8 @@ async def update_status(id: str, status: str):
         return issue_to_dict(issue)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
 
-@router.get("/get_by_user/{userid}", response_model=List[Issue])
-async def get_issues_by_user(userid: str):
-    issues = issue_collection.find({"createdBy": userid})
-    return [issue_to_dict(issue) for issue in issues]
-
-@router.post("/forward/{id}/{userid}", response_model=Issue)
-async def forward_issue(id: str, userid: str):
-    issue = issue_collection.find_one({"_id": ObjectId(id)})
-    if issue:
-        if userid not in issue["ForwardedByPeople"]:
-            issue["ForwardedByPeople"].append(userid)
-            updated_issue = issue_collection.find_one_and_update(
-                {"_id": ObjectId(id)},
-                {"$set": {"ForwardedByPeople": issue["ForwardedByPeople"]}},
-                return_document=True
-            )
-            return issue_to_dict(updated_issue)
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
-
-@router.post("/mark_spam/{id}", response_model=Issue)
-async def mark_spam(id: str):
+@router.put("/{id}/spam", response_model=Issue)
+async def mark_spam(id: str, token: str = Depends(check_token)):
     issue = issue_collection.find_one_and_update(
         {"_id": ObjectId(id)},
         {"$set": {"isSpam": True}},
@@ -101,18 +95,4 @@ async def mark_spam(id: str):
     )
     if issue:
         return issue_to_dict(issue)
-    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")
-
-@router.post("/add_comment/{id}", response_model=Issue)
-async def add_comment(id: str, comment: Comment):
-    issue = issue_collection.find_one({"_id": ObjectId(id)})
-    if issue:
-        comment.commentDate = str(comment.commentDate or "")
-        issue["comments"].append(comment.dict())
-        updated_issue = issue_collection.find_one_and_update(
-            {"_id": ObjectId(id)},
-            {"$set": {"comments": issue["comments"]}},
-            return_document=True
-        )
-        return issue_to_dict(updated_issue)
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Issue not found")

@@ -15,7 +15,7 @@ app.include_router(admin_router, prefix="/admin", tags=["Admin"])
 async def root():
     return {"message": "GreenGuard Backend is running"}
 
-# Health check endpoint
+# Health check enpdpoint
 @app.get("/health")
 async def health_check():
     return {"status": "ok"}
