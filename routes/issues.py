@@ -2,7 +2,8 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from bson.objectid import ObjectId
 from model.issue_model import Issue, issue_collection, issue_to_dict, Comment
 from typing import List
-from controllers.auth_controller import check_token
+from routes.admin import check_token  
+
 
 router = APIRouter()
 
